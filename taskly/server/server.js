@@ -1,61 +1,71 @@
 const express = require("express");
 const cors = require("cors");
-const fs = require("fs"); // Lägg till denna!
-const app = express();
+const { Pool } = require("pg"); // Vi använder Pool för stabilitet
 
+const app = express();
 app.use(cors());
 app.use(express.json());
 
-const FILE_PATH = "./data.json";
-
-// Hjälpfunktion för att läsa från filen
-const readTasks = () => {
-  if (!fs.existsSync(FILE_PATH)) return [];
-  const data = fs.readFileSync(FILE_PATH);
-  return JSON.parse(data);
-};
-
-// Hjälpfunktion för att spara till filen
-const saveTasks = (tasks) => {
-  fs.writeFileSync(FILE_PATH, JSON.stringify(tasks, null, 2));
-};
-
-// Hämta alla uppgifter
-app.get("/api/tasks", (req, res) => {
-  const tasks = readTasks();
-  res.json(tasks);
+// Inställningar för din Postgres-databas
+const pool = new Pool({
+  user: "manhal.alothman",
+  host: "localhost",
+  database: "taskly_db",
+  password: "",
+  port: 5432,
 });
 
-// Skapa en ny uppgift ➕
-app.post("/api/tasks", (req, res) => {
-  const tasks = readTasks();
-  const newTask = {
-    id: Date.now(),
-    title: req.body.title,
-    deadline: req.body.deadline,
-    completed: false,
-  };
-  tasks.push(newTask);
-  saveTasks(tasks);
-  res.json(newTask);
+app.get("/api/tasks", async (req, res) => {
+  try {
+    const result = await pool.query(
+      "SELECT * FROM tasks ORDER BY deadline ASC",
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).send("Serverfel vid hämtning");
+  }
+});
+
+app.post("/api/tasks", async (req, res) => {
+  const { title, deadline } = req.body;
+  try {
+    const result = await pool.query(
+      "INSERT INTO tasks (title, deadline) VALUES ($1, $2) RETURNING *",
+      [title, deadline],
+    );
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).send("Kunde inte spara i databasen");
+  }
 });
 
 // Ta bort uppgift ❌
-app.delete("/api/tasks/:id", (req, res) => {
-  let tasks = readTasks();
-  tasks = tasks.filter((t) => t.id !== Number(req.params.id));
-  saveTasks(tasks);
-  res.status(204).send();
+app.delete("/api/tasks/:id", async (req, res) => {
+  try {
+    await pool.query("DELETE FROM tasks WHERE id = $1", [req.params.id]);
+    res.status(204).send();
+  } catch (err) {
+    res.status(500).send("Fel vid radering");
+  }
 });
 
 // Markera som klar ✅
-app.patch("/api/tasks/:id", (req, res) => {
-  let tasks = readTasks();
-  tasks = tasks.map((t) =>
-    t.id === Number(req.params.id) ? { ...t, completed: !t.completed } : t,
-  );
-  saveTasks(tasks);
-  res.json({ message: "Uppdaterad" });
+app.patch("/api/tasks/:id", async (req, res) => {
+  try {
+    await pool.query(
+      "UPDATE tasks SET completed = NOT completed WHERE id = $1",
+      [req.params.id],
+    );
+    res.json({ message: "Uppdaterad" });
+  } catch (err) {
+    res.status(500).send("Fel vid uppdatering");
+  }
 });
 
-app.listen(5001, () => console.log("Taskly-motorn körs på port 5001! 🚀"));
+app.listen(5001, () =>
+  console.log(
+    "Taskly körs med PostgreSQL på port 5001, yeeeaaahhhh Beybe! ✅🤙🏻🐘",
+  ),
+);
