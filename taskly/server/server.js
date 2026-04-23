@@ -1,12 +1,12 @@
 const express = require("express");
 const cors = require("cors");
-const { Pool } = require("pg"); // Vi använder Pool för stabilitet
+const { Pool } = require("pg"); 
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Inställningar för din Postgres-databas
+
 const pool = new Pool({
   user: "manhal.alothman",
   host: "localhost",
